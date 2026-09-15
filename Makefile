@@ -2,6 +2,12 @@ ENV ?= local
 
 TFVARS := environments/$(ENV)/$(ENV).tfvars
 
+GREEN  := $(shell tput setaf 2)
+BLUE   := $(shell tput setaf 4)
+YELLOW := $(shell tput setaf 3)
+RED    := $(shell tput setaf 1)
+RESET  := $(shell tput sgr0)
+
 .PHONY: fmt fmt-go validate plan deploy init destroy apply
 
 apply: deploy 
@@ -10,7 +16,7 @@ init:
 	@echo "Start init"
 	terraform init
 
-plan: init
+plan: validate fmt fmt-go init
 	@echo "Planning $(ENV)..."
 	terraform plan  -var "environment=$(ENV)" -var-file="$(TFVARS)" -out="tf-$(ENV)-plan.out"
 
@@ -26,15 +32,15 @@ deploy: init
 	fi
 
 validate:
-	@echo "Validating Terraform..."
+	@echo "$(GREEN)Validating Terraform...$(RESET)"
 	terraform validate
 
 destroy:
-	@echo "Destroying environment: $(ENV)"
+	@echo "$(RED)Destroying environment: $(ENV)$(RESET)"
 	terraform destroy -var "environment=$(ENV)" -var-file="$(TFVARS)"
 
 fmt:
-	@echo "Start formatting"
+	@echo "$(GREEN)Start formatting$(RESET)"
 	@formatted=$$(terraform fmt -recursive); \
 	if [ -n "$$formatted" ]; then \
 		echo "$$formatted"; \
@@ -42,10 +48,10 @@ fmt:
 	else \
 		count=0; \
 	fi; \
-	echo "Formatted files: $$count"
+	echo "$(BLUE)Formatted files: $$count$(RESET)"
 
 fmt-go:
-	@echo "Start formatting Go code"
+	@echo "$(GREEN)Start formatting Go code$(RESET)"
 	@files=$$(find src -name "*.go" -not -path "*/vendor/*"); \
 	formatted=$$(gofmt -l -w $$files); \
 	if [ -n "$$formatted" ]; then \
@@ -54,4 +60,4 @@ fmt-go:
 	else \
 		count=0; \
 	fi; \
-	echo "Formatted files: $$count"
+	echo "$(BLUE)Formatted files: $$count$(RESET)"
