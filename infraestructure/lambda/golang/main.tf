@@ -63,7 +63,7 @@ resource "null_resource" "go_lambda_build" {
       GOOS=linux \
       GOARCH=arm64 \
       CGO_ENABLED=0 \
-      go build -o bootstrap .
+      go build -ldflags="-s -w" -o bootstrap .
     EOT
   }
 }

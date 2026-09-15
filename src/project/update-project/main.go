@@ -6,13 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
@@ -22,11 +18,11 @@ import (
 	"github.com/rivo-api/shared/transport/apigateway"
 )
 
-type ProjectCreator interface {
-	Create(ctx context.Context, p *project.Project) error
+type ProjectUpdater interface {
+	Update(ctx context.Context, id string, in project.UpdateProjectInput) (*project.Project, error)
 }
 
-var repo ProjectCreator
+var repo ProjectUpdater
 
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.TODO())
@@ -38,27 +34,22 @@ func init() {
 }
 
 func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	var in project.CreateProjectInput
+	id := req.PathParameters["id"]
+	if id == "" {
+		return apigateway.Error(apierrors.Validation("id is required")), nil
+	}
+
+	var in project.UpdateProjectInput
 	if err := json.Unmarshal([]byte(req.Body), &in); err != nil {
 		return apigateway.Error(apierrors.Validation("invalid JSON body")), nil
 	}
-	if in.Name == "" {
-		return apigateway.Error(apierrors.Validation("name is required")), nil
-	}
 
-	p := &project.Project{
-		ID:          uuid.NewString(),
-		Name:        in.Name,
-		Description: in.Description,
-		CreatedAt:   time.Now().UTC().UnixMilli(),
-	}
-
-	err := repo.Create(ctx, p)
+	p, err := repo.Update(ctx, id, in)
 	if err != nil {
 		return apigateway.Error(err), nil
 	}
 
-	return apigateway.Success(http.StatusCreated, p), nil
+	return apigateway.Success(http.StatusOK, p), nil
 }
 
 func main() {

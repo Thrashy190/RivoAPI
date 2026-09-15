@@ -15,7 +15,7 @@ rivo-api/
     shared/             # módulo Go compartido entre lambdas (no se despliega solo)
       go.mod
       models/            # structs de dominio (ej. project.Project)
-      apperrors/          # tipo de error de aplicación + mapeo a respuestas HTTP
+      errors/          # tipo de error de aplicación + mapeo a respuestas HTTP
       repository/         # implementaciones concretas de acceso a datos (ej. DynamoDB)
     ping/                # una lambda = un módulo Go independiente
       go.mod
@@ -52,14 +52,16 @@ use (
 ## El paquete `shared`
 
 - `shared/models/<dominio>/`: structs de dominio con tags (`dynamodbav`, `json`, etc). Ej: `models/project/project.go`.
-- `shared/apperrors/`: tipo `AppError` (implementa `error`) + constructores (`NotFound`, `Validation`, `Internal`) + una función que convierte cualquier error en una `events.APIGatewayProxyResponse` consistente (mismo shape de JSON de error en todas las lambdas).
-- `shared/repository/`: implementaciones concretas contra una fuente de datos real (ej. `DynamoDBProjectRepository`), para que los handlers no hablen directo con el SDK de AWS.
+- `shared/errors/`: tipo `ApiError` (implementa `error`, con `Code`, `Message`, `StatusCode`, `Err`) + constructores (`NotFound`, `Validation`, `Internal`). Es deliberadamente agnóstico de transporte — no importa `events` ni sabe que existe API Gateway, para poder reusarse detrás de cualquier adaptador conductor futuro (SQS, EventBridge, etc).
+- `shared/transport/apigateway/`: el serializador específico de la integración proxy de API Gateway — `Error(err) events.APIGatewayProxyResponse` traduce un `ApiError` a la respuesta HTTP consistente, `Success(statusCode, body)` hace lo mismo para el camino feliz (mismo shape de JSON y mismo header `Content-Type` en todas las lambdas). Vive fuera de `shared/errors` a propósito: no es parte del dominio del error, es la vista de un adaptador conductor concreto sobre él. `transport/` es el paquete padre a propósito, aunque hoy solo tenga `apigateway` adentro, para que un futuro `transport/sqs` o `transport/eventbridge` no requiera reacomodar nada.
+- `shared/repository/`: implementaciones concretas contra una fuente de datos real — hoy `DynamoDBProjectRepository`, con `GetByID`, `Create`, `Update`, `Delete`, `List` — para que los handlers no hablen directo con el SDK de AWS. Un solo tipo concreto satisface varios puertos chicos a la vez (uno por lambda que lo consume).
 
-**Las interfaces (`projectGetter`, `projectCreator`, etc.) se declaran en cada lambda, no en `shared`** — cada handler pide solo los métodos que usa, y el tipo concreto en `repository` los satisface implícitamente sin que `shared` sepa que esas interfaces existen. Esto es idiomático en Go: "el consumidor define el contrato".
+**Las interfaces (`ProjectGetter`, `ProjectCreator`, etc.) se declaran en cada lambda, no en `shared`** — cada handler pide solo los métodos que usa, y el tipo concreto en `repository` los satisface implícitamente sin que `shared` sepa que esas interfaces existen. Esto es idiomático en Go: "el consumidor define el contrato".
 
-Como `shared` es el mismo módulo para todas sus subcarpetas, agregar un paquete nuevo (`apperrors`, `repository`, otro dominio en `models`) **no requiere tocar el `go.mod` de las lambdas que ya dependen de `shared`** — solo agregas el import:
+Como `shared` es el mismo módulo para todas sus subcarpetas, agregar un paquete nuevo (`transport/apigateway`, `repository`, otro dominio en `models`) **no requiere tocar el `go.mod` de las lambdas que ya dependen de `shared`** — solo agregas el import:
 ```go
-import "github.com/rivo-api/shared/apperrors"
+import "github.com/rivo-api/shared/errors"
+import "github.com/rivo-api/shared/transport/apigateway"
 ```
 
 ## Cómo crea Terraform el build de una lambda (para entender qué pasa "por debajo")

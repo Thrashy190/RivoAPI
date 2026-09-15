@@ -61,6 +61,66 @@ module "lambda_get_project" {
   ]
 }
 
+module "lambda_get_all_projects" {
+  source              = "./infraestructure/lambda/golang"
+  function_name       = "get-all-projects"
+  path_directory_file = "project/get-all-projects/main.go"
+  project_name        = var.project_name
+  environment         = var.environment
+
+  environment_variables = {
+    TABLE_NAME = module.projects_table.name
+  }
+
+  statement = [
+    {
+      Effect   = "Allow"
+      Action   = ["dynamodb:Scan"]
+      Resource = module.projects_table.arn
+    }
+  ]
+}
+
+module "lambda_update_project" {
+  source              = "./infraestructure/lambda/golang"
+  function_name       = "update-project"
+  path_directory_file = "project/update-project/main.go"
+  project_name        = var.project_name
+  environment         = var.environment
+
+  environment_variables = {
+    TABLE_NAME = module.projects_table.name
+  }
+
+  statement = [
+    {
+      Effect   = "Allow"
+      Action   = ["dynamodb:UpdateItem"]
+      Resource = module.projects_table.arn
+    }
+  ]
+}
+
+module "lambda_delete_project" {
+  source              = "./infraestructure/lambda/golang"
+  function_name       = "delete-project"
+  path_directory_file = "project/delete-project/main.go"
+  project_name        = var.project_name
+  environment         = var.environment
+
+  environment_variables = {
+    TABLE_NAME = module.projects_table.name
+  }
+
+  statement = [
+    {
+      Effect   = "Allow"
+      Action   = ["dynamodb:DeleteItem"]
+      Resource = module.projects_table.arn
+    }
+  ]
+}
+
 # -- API --
 
 module "rest_api" {
@@ -83,7 +143,7 @@ module "projects_resource" {
   path_part   = "projects"
 }
 
-module "get_project_resource" {
+module "project_id_resource" {
   source      = "./infraestructure/api/api-resource"
   rest_api_id = module.rest_api.id
   parent_id   = module.projects_resource.id
@@ -111,12 +171,39 @@ locals {
       }
     }
     get_project = {
-      resource_id = module.get_project_resource.id
+      resource_id = module.project_id_resource.id
       http_method = "GET"
       route_path  = "projects/{id}"
       lambda = {
         invoke_arn    = module.lambda_get_project.invoke_arn
         function_name = module.lambda_get_project.function_name
+      }
+    }
+    get_all_project = {
+      resource_id = module.projects_resource.id
+      http_method = "GET"
+      route_path  = "projects"
+      lambda = {
+        invoke_arn    = module.lambda_get_all_projects.invoke_arn
+        function_name = module.lambda_get_all_projects.function_name
+      }
+    }
+    update_project = {
+      resource_id = module.project_id_resource.id
+      http_method = "PATCH"
+      route_path  = "projects/{id}"
+      lambda = {
+        invoke_arn    = module.lambda_update_project.invoke_arn
+        function_name = module.lambda_update_project.function_name
+      }
+    }
+    delete_project = {
+      resource_id = module.project_id_resource.id
+      http_method = "DELETE"
+      route_path  = "projects/{id}"
+      lambda = {
+        invoke_arn    = module.lambda_delete_project.invoke_arn
+        function_name = module.lambda_delete_project.function_name
       }
     }
   }
